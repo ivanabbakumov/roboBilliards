@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.venv/
+.DS_Store
+captured_photos/
+captured_videos/
+*.avi
+*.mp4
+*.mov
+RoboBilliards_project_context.md

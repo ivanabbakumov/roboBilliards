@@ -1,0 +1,48 @@
+<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Робобильярд · Табло</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101918;color:#f3f4ed;font-family:Inter,Arial,sans-serif}main{max-width:1550px;height:100svh;min-height:380px;margin:auto;padding:1.6vh 3vw;display:flex;flex-direction:column;gap:1.4vh}header,.actions,.buttons{display:flex;align-items:center;gap:12px}header{justify-content:space-between}h1{font-size:clamp(18px,2.1vw,34px);margin:0;letter-spacing:-.04em}button{background:#233331;color:inherit;border:1px solid #51615d;border-radius:7px;padding:9px 15px;font:inherit;cursor:pointer}button:hover{background:#374c47}button:disabled{opacity:.5}.feed{position:relative;background:#060c0b;flex:1;min-height:75px;overflow:hidden;border-radius:9px}.feed img{width:100%;height:100%;object-fit:contain;display:block}.feed span{position:absolute;inset:0;display:grid;place-items:center;color:#c7cfca}.score{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid #53665e;padding-top:1.5vh}.cell{text-align:center}.cell+.cell{border-left:1px solid #465650}.number{font-size:min(12vh,11vw);font-weight:750;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.045em}.label{font-size:clamp(14px,1.7vw,25px);margin-bottom:.6vh}.orange{color:#ffad67}.clock{color:#b6e7c8}.buttons,.actions{justify-content:center;margin-top:.8vh;flex-wrap:wrap}.buttons button{min-width:48px}.start{background:#b6e7c8;color:#13271a}.actions{margin:0}a{color:#c2ded0}[hidden]{display:none!important}.feed img:not([src]){visibility:hidden}
+</style><main><header><h1>Робобильярд</h1><button id="full">На весь экран</button></header>
+<div class="feed"><img id="video" alt="Игровое поле"><span id="notice">Ожидание старта</span></div>
+<section class="score"><div class="cell"><div class="label">Белые</div><div id="white" class="number">0</div><div class="buttons controls" hidden><button data-act="white-" aria-label="Убрать очко белым">−</button><button data-act="white+" aria-label="Добавить очко белым">+</button></div></div>
+<div class="cell clock"><div class="label" id="phase">Время раунда</div><div id="clock" class="number">01:00</div><div class="buttons controls" hidden><button class="start" id="start" data-act="start">Старт</button></div></div>
+<div class="cell orange"><div class="label">Оранжевые</div><div id="orange" class="number">0</div><div class="buttons controls" hidden><button data-act="orange-" aria-label="Убрать очко оранжевым">−</button><button data-act="orange+" aria-label="Добавить очко оранжевым">+</button></div></div></section>
+<div class="actions controls" hidden><span id="auto" role="status"></span><button data-act="extra">Доп. время · 30 с</button><button data-act="reset">Новый матч</button></div></main>
+<script>
+const el=id=>document.getElementById(id), judge=location.pathname==='/judge';
+document.querySelectorAll('.controls').forEach(x=>x.hidden=!judge);
+el('full').onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();
+document.onfullscreenchange=()=>el('full').textContent=document.fullscreenElement?'Свернуть':'На весь экран';
+let captureStarted=false;
+async function sync(){
+ try{
+  const r=await fetch('/state');if(!r.ok)throw Error();const s=await r.json();
+  captureStarted=s.capture_started;
+  const goal=s.last_goal;
+  const detail=goal?' · '+(goal.team==='white'?'Белые':'Оранжевые')+', лунка '+goal.pocket:'';
+  el('auto').textContent=!captureStarted?'':s.pockets_ready?'Автосчёт'+detail:'Поиск четырёх лунок · доступен ручной счёт';
+  el('white').textContent=s.white;el('orange').textContent=s.orange;
+  el('clock').textContent=[Math.floor(s.seconds/60),s.seconds%60].map(x=>String(x).padStart(2,'0')).join(':');
+  el('phase').textContent=s.seconds===0?'Время вышло':s.running?'Идёт раунд':'Время раунда';
+  el('start').dataset.act=s.running?'pause':'start';el('start').textContent=s.running?'Пауза':'Старт';el('start').disabled=s.seconds===0;
+ }catch{el('phase').textContent='Связь с табло потеряна'}
+ setTimeout(sync,250)
+}
+document.querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>{
+ const act=b.dataset.act;
+ if(act==='reset'&&!confirm('Начать новый матч и обнулить счёт?'))return;
+ if(act==='extra'&&!confirm('Установить 30 секунд и сохранить счёт?'))return;
+ try{const r=await fetch('/action',{method:'POST',headers:{'X-Referee':'1'},body:act});if(!r.ok)throw Error()}catch{alert('Команда не подтверждена. Проверьте табло.')}
+});
+async function picture(){
+ if(!captureStarted){
+  el('video').hidden=true;el('notice').hidden=false;el('notice').textContent='Ожидание старта';
+  setTimeout(picture,250);return
+ }
+ let delay=65;
+ try{const r=await fetch('/frame.jpg');if(!r.ok)throw Error();
+ const url=URL.createObjectURL(await r.blob()),old=el('video').src;el('video').src=url;if(old)URL.revokeObjectURL(old);el('notice').hidden=true;el('video').hidden=false;
+ }catch{el('video').hidden=true;el('notice').hidden=false;el('notice').textContent='Нет сигнала камеры';delay=1000}
+ setTimeout(picture,delay)
+}
+sync();picture()
+</script></html>
